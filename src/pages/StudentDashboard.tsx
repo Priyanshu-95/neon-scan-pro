@@ -1,27 +1,123 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar, CheckCircle2, Clock, Camera, LogOut, User } from 'lucide-react';
 import DashboardCard from '@/components/DashboardCard';
 import CameraFeed from '@/components/CameraFeed';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
+import { format } from 'date-fns';
+
+interface AttendanceRecord {
+  id: string;
+  marked_at: string;
+  status: string;
+  face_verified: boolean;
+}
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
+  const { user, signOut, loading } = useAuth();
   const [scanning, setScanning] = useState(false);
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
+  const [stats, setStats] = useState({
+    totalClasses: 0,
+    attendedClasses: 0,
+    attendanceRate: 0,
+    thisMonthRate: 0
+  });
 
-  const handleMarkAttendance = () => {
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate('/auth');
+    }
+  }, [user, loading, navigate]);
+
+  useEffect(() => {
+    if (user) {
+      fetchAttendanceRecords();
+    }
+  }, [user]);
+
+  const fetchAttendanceRecords = async () => {
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from('attendance_records')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('marked_at', { ascending: false })
+      .limit(10);
+
+    if (error) {
+      console.error('Error fetching attendance:', error);
+      return;
+    }
+
+    setAttendanceRecords(data || []);
+
+    // Calculate stats
+    const total = data?.length || 0;
+    const present = data?.filter(r => r.status === 'present').length || 0;
+    const rate = total > 0 ? (present / total) * 100 : 0;
+
+    setStats({
+      totalClasses: total,
+      attendedClasses: present,
+      attendanceRate: rate,
+      thisMonthRate: rate
+    });
+  };
+
+  const handleMarkAttendance = async () => {
+    if (!user) {
+      toast.error('Please login first');
+      return;
+    }
+
     setScanning(true);
-    setTimeout(() => {
+    
+    // Simulate face recognition delay
+    setTimeout(async () => {
+      const { error } = await supabase
+        .from('attendance_records')
+        .insert({
+          user_id: user.id,
+          status: 'present',
+          face_verified: true,
+          marked_at: new Date().toISOString()
+        });
+
       setScanning(false);
-      toast.success('Attendance marked successfully!');
+
+      if (error) {
+        console.error('Error marking attendance:', error);
+        toast.error('Failed to mark attendance');
+      } else {
+        toast.success('Attendance marked successfully!');
+        fetchAttendanceRecords();
+      }
     }, 3000);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await signOut();
     toast.success('Logged out successfully');
-    navigate('/login');
+    navigate('/auth');
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted/20">
+        <div className="animate-pulse text-primary">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
@@ -32,6 +128,9 @@ const StudentDashboard = () => {
             Student Dashboard
           </h1>
           <div className="flex items-center gap-4">
+            <span className="text-sm text-muted-foreground hidden sm:block">
+              {user.email}
+            </span>
             <Button variant="outline" size="icon" className="rounded-full">
               <User className="h-5 w-5" />
             </Button>
@@ -48,22 +147,21 @@ const StudentDashboard = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <DashboardCard
             title="Attendance Rate"
-            value="87.5%"
+            value={`${stats.attendanceRate.toFixed(1)}%`}
             icon={CheckCircle2}
-            trend="+2.3%"
+            trend={stats.attendanceRate > 75 ? '+' : ''}
             glowColor="blue"
           />
           <DashboardCard
             title="Classes Attended"
-            value="35/40"
+            value={`${stats.attendedClasses}/${stats.totalClasses}`}
             icon={Calendar}
             glowColor="purple"
           />
           <DashboardCard
             title="This Month"
-            value="92%"
+            value={`${stats.thisMonthRate.toFixed(0)}%`}
             icon={Clock}
-            trend="+5.1%"
             glowColor="blue"
           />
         </div>
@@ -89,26 +187,30 @@ const StudentDashboard = () => {
           {/* Attendance History */}
           <DashboardCard title="Recent Attendance History" glowColor="purple">
             <div className="space-y-3">
-              {[
-                { date: 'Today, Jan 15', status: 'Present', time: '09:15 AM' },
-                { date: 'Jan 14', status: 'Present', time: '09:10 AM' },
-                { date: 'Jan 13', status: 'Absent', time: '-' },
-                { date: 'Jan 12', status: 'Present', time: '09:20 AM' },
-                { date: 'Jan 11', status: 'Present', time: '09:05 AM' },
-              ].map((record, index) => (
-                <div key={index} className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted/70 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-2 h-2 rounded-full ${record.status === 'Present' ? 'bg-green-400' : 'bg-red-400'}`}></div>
-                    <div>
-                      <p className="font-medium">{record.date}</p>
-                      <p className="text-sm text-muted-foreground">{record.time}</p>
+              {attendanceRecords.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">
+                  No attendance records yet. Mark your first attendance!
+                </p>
+              ) : (
+                attendanceRecords.map((record) => (
+                  <div key={record.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted/70 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-2 h-2 rounded-full ${record.status === 'present' ? 'bg-green-400' : 'bg-red-400'}`}></div>
+                      <div>
+                        <p className="font-medium">
+                          {format(new Date(record.marked_at), 'MMM d, yyyy')}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {format(new Date(record.marked_at), 'h:mm a')}
+                        </p>
+                      </div>
                     </div>
+                    <span className={`text-sm font-medium capitalize ${record.status === 'present' ? 'text-green-400' : 'text-red-400'}`}>
+                      {record.status}
+                    </span>
                   </div>
-                  <span className={`text-sm font-medium ${record.status === 'Present' ? 'text-green-400' : 'text-red-400'}`}>
-                    {record.status}
-                  </span>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </DashboardCard>
         </div>
