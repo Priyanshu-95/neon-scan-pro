@@ -48,9 +48,12 @@ export type Database = {
           created_at: string
           department: string | null
           enrollment_number: string | null
+          face_image_url: string | null
           full_name: string | null
           id: string
+          phone: string | null
           role: string
+          roll_number: string | null
           updated_at: string
           user_id: string
         }
@@ -60,9 +63,12 @@ export type Database = {
           created_at?: string
           department?: string | null
           enrollment_number?: string | null
+          face_image_url?: string | null
           full_name?: string | null
           id?: string
+          phone?: string | null
           role?: string
+          roll_number?: string | null
           updated_at?: string
           user_id: string
         }
@@ -72,9 +78,12 @@ export type Database = {
           created_at?: string
           department?: string | null
           enrollment_number?: string | null
+          face_image_url?: string | null
           full_name?: string | null
           id?: string
+          phone?: string | null
           role?: string
+          roll_number?: string | null
           updated_at?: string
           user_id?: string
         }
