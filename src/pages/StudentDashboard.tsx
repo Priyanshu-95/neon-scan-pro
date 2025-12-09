@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar, CheckCircle2, Clock, Camera, LogOut, User } from 'lucide-react';
 import DashboardCard from '@/components/DashboardCard';
-import FaceScannerAnimation from '@/components/FaceScannerAnimation';
+import CameraFeed from '@/components/CameraFeed';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 
@@ -73,14 +73,7 @@ const StudentDashboard = () => {
           <DashboardCard title="Mark Today's Attendance" glowColor="blue">
             <div className="space-y-4">
               <div className="flex justify-center py-4">
-                {scanning ? (
-                  <FaceScannerAnimation size={200} />
-                ) : (
-                  <div className="text-center space-y-4">
-                    <Camera className="w-16 h-16 mx-auto text-primary" />
-                    <p className="text-muted-foreground">Ready to scan your face</p>
-                  </div>
-                )}
+                <CameraFeed isActive={scanning} size={240} />
               </div>
               <Button 
                 onClick={handleMarkAttendance} 
