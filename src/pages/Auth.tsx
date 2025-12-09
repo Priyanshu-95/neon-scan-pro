@@ -8,8 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import FaceScannerAnimation from '@/components/FaceScannerAnimation';
-import { Eye, EyeOff, Mail, Lock, User } from 'lucide-react';
+import FaceCapture from '@/components/FaceCapture';
+import { Eye, EyeOff, Mail, Lock, User, Phone, Hash, ArrowLeft, ArrowRight, Check } from 'lucide-react';
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -17,6 +19,7 @@ const Auth = () => {
   
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [registrationStep, setRegistrationStep] = useState(1);
   
   // Login form
   const [loginEmail, setLoginEmail] = useState('');
@@ -27,10 +30,14 @@ const Auth = () => {
   const [registerPassword, setRegisterPassword] = useState('');
   const [registerFullName, setRegisterFullName] = useState('');
   const [registerRole, setRegisterRole] = useState('student');
+  const [registerRollNumber, setRegisterRollNumber] = useState('');
+  const [registerPhone, setRegisterPhone] = useState('');
+  const [registerDepartment, setRegisterDepartment] = useState('');
+  const [registerClass, setRegisterClass] = useState('');
+  const [capturedFaceBlob, setCapturedFaceBlob] = useState<Blob | null>(null);
 
   useEffect(() => {
     if (user && !loading) {
-      // Redirect based on role (for now, just go to student dashboard)
       navigate('/student/dashboard');
     }
   }, [user, loading, navigate]);
@@ -57,10 +64,38 @@ const Auth = () => {
     }
   };
 
+  const handleFaceCapture = (blob: Blob) => {
+    setCapturedFaceBlob(blob);
+    toast.success('Face captured successfully!');
+  };
+
+  const uploadFaceImage = async (userId: string, blob: Blob): Promise<string | null> => {
+    const fileName = `${userId}/face-${Date.now()}.jpg`;
+    
+    const { error: uploadError } = await supabase.storage
+      .from('face-images')
+      .upload(fileName, blob, {
+        contentType: 'image/jpeg',
+        upsert: true
+      });
+
+    if (uploadError) {
+      console.error('Error uploading face image:', uploadError);
+      return null;
+    }
+
+    const { data } = supabase.storage
+      .from('face-images')
+      .getPublicUrl(fileName);
+
+    return data.publicUrl;
+  };
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     if (!registerEmail || !registerPassword || !registerFullName) {
-      toast.error('Please fill in all fields');
+      toast.error('Please fill in all required fields');
       return;
     }
 
@@ -69,20 +104,57 @@ const Auth = () => {
       return;
     }
 
+    if (!capturedFaceBlob) {
+      toast.error('Please capture your face photo first');
+      setRegistrationStep(1);
+      return;
+    }
+
     setIsLoading(true);
+    
+    // Sign up the user
     const { error } = await signUp(registerEmail, registerPassword, registerFullName, registerRole);
-    setIsLoading(false);
 
     if (error) {
+      setIsLoading(false);
       if (error.message.includes('already registered')) {
         toast.error('This email is already registered. Please login instead.');
       } else {
         toast.error(error.message);
       }
-    } else {
-      toast.success('Account created successfully! You are now logged in.');
+      return;
     }
+
+    // Wait for user to be created and get the user ID
+    const { data: { user: newUser } } = await supabase.auth.getUser();
+    
+    if (newUser) {
+      // Upload face image
+      const faceImageUrl = await uploadFaceImage(newUser.id, capturedFaceBlob);
+
+      // Update profile with additional info
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          roll_number: registerRollNumber || null,
+          phone: registerPhone || null,
+          department: registerDepartment || null,
+          class: registerClass || null,
+          face_image_url: faceImageUrl
+        })
+        .eq('user_id', newUser.id);
+
+      if (profileError) {
+        console.error('Error updating profile:', profileError);
+      }
+    }
+
+    setIsLoading(false);
+    toast.success('Account created successfully!');
   };
+
+  const canProceedToStep2 = capturedFaceBlob !== null;
+  const canProceedToStep3 = registerFullName && registerEmail && registerPassword && registerPassword.length >= 6;
 
   if (loading) {
     return (
@@ -100,10 +172,10 @@ const Auth = () => {
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-secondary/5 rounded-full blur-3xl" />
       </div>
 
-      <Card className="w-full max-w-md bg-card/80 backdrop-blur-xl border-border/50 glow-border-blue relative z-10">
+      <Card className="w-full max-w-lg bg-card/80 backdrop-blur-xl border-border/50 glow-border-blue relative z-10">
         <CardHeader className="text-center space-y-4">
           <div className="mx-auto">
-            <FaceScannerAnimation size={80} />
+            <FaceScannerAnimation size={60} />
           </div>
           <CardTitle className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
             AI Attendance System
@@ -163,71 +235,229 @@ const Auth = () => {
             </TabsContent>
 
             <TabsContent value="register">
-              <form onSubmit={handleRegister} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="register-name">Full Name</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="register-name"
-                      type="text"
-                      placeholder="John Doe"
-                      value={registerFullName}
-                      onChange={(e) => setRegisterFullName(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="register-email">Email</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="register-email"
-                      type="email"
-                      placeholder="you@example.com"
-                      value={registerEmail}
-                      onChange={(e) => setRegisterEmail(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="register-password">Password</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="register-password"
-                      type={showPassword ? 'text' : 'password'}
-                      placeholder="••••••••"
-                      value={registerPassword}
-                      onChange={(e) => setRegisterPassword(e.target.value)}
-                      className="pl-10 pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              {/* Step indicators */}
+              <div className="flex items-center justify-center gap-2 mb-6">
+                {[1, 2, 3].map((step) => (
+                  <div key={step} className="flex items-center">
+                    <div 
+                      className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
+                        registrationStep === step 
+                          ? 'bg-primary text-primary-foreground' 
+                          : registrationStep > step 
+                            ? 'bg-green-500 text-white' 
+                            : 'bg-muted text-muted-foreground'
+                      }`}
                     >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
+                      {registrationStep > step ? <Check className="w-4 h-4" /> : step}
+                    </div>
+                    {step < 3 && (
+                      <div className={`w-8 h-0.5 ${registrationStep > step ? 'bg-green-500' : 'bg-muted'}`} />
+                    )}
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="register-role">Role</Label>
-                  <Select value={registerRole} onValueChange={setRegisterRole}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select your role" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="student">Student</SelectItem>
-                      <SelectItem value="teacher">Teacher</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button type="submit" className="w-full glow-blue" disabled={isLoading}>
-                  {isLoading ? 'Creating account...' : 'Create Account'}
-                </Button>
+                ))}
+              </div>
+
+              <form onSubmit={handleRegister}>
+                {/* Step 1: Face Capture */}
+                {registrationStep === 1 && (
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-center">Capture Your Face</h3>
+                    <p className="text-sm text-muted-foreground text-center">
+                      This will be used for face recognition attendance
+                    </p>
+                    <div className="flex justify-center py-4">
+                      <FaceCapture onCapture={handleFaceCapture} />
+                    </div>
+                    <Button 
+                      type="button" 
+                      className="w-full gap-2"
+                      onClick={() => setRegistrationStep(2)}
+                      disabled={!canProceedToStep2}
+                    >
+                      Next <ArrowRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
+
+                {/* Step 2: Basic Info */}
+                {registrationStep === 2 && (
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-center">Account Details</h3>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="register-name">Full Name *</Label>
+                      <div className="relative">
+                        <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          id="register-name"
+                          type="text"
+                          placeholder="John Doe"
+                          value={registerFullName}
+                          onChange={(e) => setRegisterFullName(e.target.value)}
+                          className="pl-10"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="register-email">Email *</Label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          id="register-email"
+                          type="email"
+                          placeholder="you@example.com"
+                          value={registerEmail}
+                          onChange={(e) => setRegisterEmail(e.target.value)}
+                          className="pl-10"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="register-password">Password *</Label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          id="register-password"
+                          type={showPassword ? 'text' : 'password'}
+                          placeholder="••••••••"
+                          value={registerPassword}
+                          onChange={(e) => setRegisterPassword(e.target.value)}
+                          className="pl-10 pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">Minimum 6 characters</p>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button 
+                        type="button" 
+                        variant="outline"
+                        className="flex-1 gap-2"
+                        onClick={() => setRegistrationStep(1)}
+                      >
+                        <ArrowLeft className="w-4 h-4" /> Back
+                      </Button>
+                      <Button 
+                        type="button" 
+                        className="flex-1 gap-2"
+                        onClick={() => setRegistrationStep(3)}
+                        disabled={!canProceedToStep3}
+                      >
+                        Next <ArrowRight className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 3: Additional Info */}
+                {registrationStep === 3 && (
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-center">Additional Information</h3>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="register-roll">Roll Number</Label>
+                        <div className="relative">
+                          <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            id="register-roll"
+                            type="text"
+                            placeholder="e.g., 2024001"
+                            value={registerRollNumber}
+                            onChange={(e) => setRegisterRollNumber(e.target.value)}
+                            className="pl-10"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="register-phone">Phone</Label>
+                        <div className="relative">
+                          <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            id="register-phone"
+                            type="tel"
+                            placeholder="e.g., 9876543210"
+                            value={registerPhone}
+                            onChange={(e) => setRegisterPhone(e.target.value)}
+                            className="pl-10"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="register-department">Department</Label>
+                      <Select value={registerDepartment} onValueChange={setRegisterDepartment}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select department" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="computer_science">Computer Science</SelectItem>
+                          <SelectItem value="electronics">Electronics</SelectItem>
+                          <SelectItem value="mechanical">Mechanical</SelectItem>
+                          <SelectItem value="civil">Civil</SelectItem>
+                          <SelectItem value="electrical">Electrical</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="register-class">Class</Label>
+                      <Select value={registerClass} onValueChange={setRegisterClass}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select class" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="first_year">First Year</SelectItem>
+                          <SelectItem value="second_year">Second Year</SelectItem>
+                          <SelectItem value="third_year">Third Year</SelectItem>
+                          <SelectItem value="fourth_year">Fourth Year</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="register-role">Role</Label>
+                      <Select value={registerRole} onValueChange={setRegisterRole}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select your role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="student">Student</SelectItem>
+                          <SelectItem value="teacher">Teacher</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button 
+                        type="button" 
+                        variant="outline"
+                        className="flex-1 gap-2"
+                        onClick={() => setRegistrationStep(2)}
+                      >
+                        <ArrowLeft className="w-4 h-4" /> Back
+                      </Button>
+                      <Button 
+                        type="submit" 
+                        className="flex-1 glow-blue" 
+                        disabled={isLoading}
+                      >
+                        {isLoading ? 'Creating...' : 'Create Account'}
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </form>
             </TabsContent>
           </Tabs>
