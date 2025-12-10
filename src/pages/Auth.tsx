@@ -12,6 +12,19 @@ import { supabase } from '@/integrations/supabase/client';
 import FaceScannerAnimation from '@/components/FaceScannerAnimation';
 import FaceCapture from '@/components/FaceCapture';
 import { Eye, EyeOff, Mail, Lock, User, Phone, Hash, ArrowLeft, ArrowRight, Check } from 'lucide-react';
+import { z } from 'zod';
+
+// Validation schemas
+const step2Schema = z.object({
+  fullName: z.string().trim().min(1, 'Full name is required').max(100, 'Full name must be less than 100 characters'),
+  email: z.string().trim().email('Please enter a valid email address').max(255, 'Email must be less than 255 characters'),
+  password: z.string().min(8, 'Password must be at least 8 characters').max(128, 'Password must be less than 128 characters'),
+});
+
+const step3Schema = z.object({
+  rollNumber: z.string().max(20, 'Roll number must be less than 20 characters').optional().or(z.literal('')),
+  phone: z.string().regex(/^$|^[0-9]{10}$/, 'Phone must be exactly 10 digits').optional().or(z.literal('')),
+});
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -90,16 +103,61 @@ const Auth = () => {
     return data.publicUrl;
   };
 
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
+  const validateStep2 = () => {
+    const result = step2Schema.safeParse({
+      fullName: registerFullName,
+      email: registerEmail,
+      password: registerPassword,
+    });
+    
+    if (!result.success) {
+      const errors: Record<string, string> = {};
+      result.error.errors.forEach((err) => {
+        if (err.path[0]) {
+          errors[err.path[0] as string] = err.message;
+        }
+      });
+      setValidationErrors(errors);
+      return false;
+    }
+    setValidationErrors({});
+    return true;
+  };
+
+  const validateStep3 = () => {
+    const result = step3Schema.safeParse({
+      rollNumber: registerRollNumber,
+      phone: registerPhone,
+    });
+    
+    if (!result.success) {
+      const errors: Record<string, string> = {};
+      result.error.errors.forEach((err) => {
+        if (err.path[0]) {
+          errors[err.path[0] as string] = err.message;
+        }
+      });
+      setValidationErrors(errors);
+      return false;
+    }
+    setValidationErrors({});
+    return true;
+  };
+
+  const handleStep2Next = () => {
+    if (validateStep2()) {
+      setRegistrationStep(3);
+    }
+  };
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!registerEmail || !registerPassword || !registerFullName) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
-
-    if (registerPassword.length < 6) {
-      toast.error('Password must be at least 6 characters');
+    // Validate all steps
+    if (!validateStep2() || !validateStep3()) {
+      toast.error('Please fix the validation errors');
       return;
     }
 
@@ -153,7 +211,7 @@ const Auth = () => {
   };
 
   const canProceedToStep2 = capturedFaceBlob !== null;
-  const canProceedToStep3 = registerFullName && registerEmail && registerPassword && registerPassword.length >= 6;
+  const canProceedToStep3 = registerFullName && registerEmail && registerPassword && registerPassword.length >= 8;
 
   if (loading) {
     return (
@@ -293,9 +351,13 @@ const Auth = () => {
                           placeholder="John Doe"
                           value={registerFullName}
                           onChange={(e) => setRegisterFullName(e.target.value)}
-                          className="pl-10"
+                          className={`pl-10 ${validationErrors.fullName ? 'border-destructive' : ''}`}
+                          maxLength={100}
                         />
                       </div>
+                      {validationErrors.fullName && (
+                        <p className="text-xs text-destructive">{validationErrors.fullName}</p>
+                      )}
                     </div>
 
                     <div className="space-y-2">
@@ -308,9 +370,13 @@ const Auth = () => {
                           placeholder="you@example.com"
                           value={registerEmail}
                           onChange={(e) => setRegisterEmail(e.target.value)}
-                          className="pl-10"
+                          className={`pl-10 ${validationErrors.email ? 'border-destructive' : ''}`}
+                          maxLength={255}
                         />
                       </div>
+                      {validationErrors.email && (
+                        <p className="text-xs text-destructive">{validationErrors.email}</p>
+                      )}
                     </div>
 
                     <div className="space-y-2">
@@ -323,7 +389,8 @@ const Auth = () => {
                           placeholder="••••••••"
                           value={registerPassword}
                           onChange={(e) => setRegisterPassword(e.target.value)}
-                          className="pl-10 pr-10"
+                          className={`pl-10 pr-10 ${validationErrors.password ? 'border-destructive' : ''}`}
+                          maxLength={128}
                         />
                         <button
                           type="button"
@@ -333,7 +400,11 @@ const Auth = () => {
                           {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
                       </div>
-                      <p className="text-xs text-muted-foreground">Minimum 6 characters</p>
+                      {validationErrors.password ? (
+                        <p className="text-xs text-destructive">{validationErrors.password}</p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">Minimum 8 characters</p>
+                      )}
                     </div>
 
                     <div className="flex gap-2">
@@ -348,7 +419,7 @@ const Auth = () => {
                       <Button 
                         type="button" 
                         className="flex-1 gap-2"
-                        onClick={() => setRegistrationStep(3)}
+                        onClick={handleStep2Next}
                         disabled={!canProceedToStep3}
                       >
                         Next <ArrowRight className="w-4 h-4" />
@@ -373,9 +444,13 @@ const Auth = () => {
                             placeholder="e.g., 2024001"
                             value={registerRollNumber}
                             onChange={(e) => setRegisterRollNumber(e.target.value)}
-                            className="pl-10"
+                            className={`pl-10 ${validationErrors.rollNumber ? 'border-destructive' : ''}`}
+                            maxLength={20}
                           />
                         </div>
+                        {validationErrors.rollNumber && (
+                          <p className="text-xs text-destructive">{validationErrors.rollNumber}</p>
+                        )}
                       </div>
 
                       <div className="space-y-2">
@@ -387,10 +462,14 @@ const Auth = () => {
                             type="tel"
                             placeholder="e.g., 9876543210"
                             value={registerPhone}
-                            onChange={(e) => setRegisterPhone(e.target.value)}
-                            className="pl-10"
+                            onChange={(e) => setRegisterPhone(e.target.value.replace(/[^0-9]/g, '').slice(0, 10))}
+                            className={`pl-10 ${validationErrors.phone ? 'border-destructive' : ''}`}
+                            maxLength={10}
                           />
                         </div>
+                        {validationErrors.phone && (
+                          <p className="text-xs text-destructive">{validationErrors.phone}</p>
+                        )}
                       </div>
                     </div>
 
