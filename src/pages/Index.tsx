@@ -36,7 +36,7 @@ const Index = () => {
                   Get Started
                 </Button>
               </Link>
-              <Link to="/register">
+              <Link to="/auth">
                 <Button size="lg" variant="outline" className="text-lg px-8 glow-border-purple">
                   Register Now
                 </Button>
