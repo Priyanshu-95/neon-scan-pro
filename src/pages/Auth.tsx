@@ -29,7 +29,6 @@ const Auth = () => {
   const [registerEmail, setRegisterEmail] = useState('');
   const [registerPassword, setRegisterPassword] = useState('');
   const [registerFullName, setRegisterFullName] = useState('');
-  const [registerRole, setRegisterRole] = useState('student');
   const [registerRollNumber, setRegisterRollNumber] = useState('');
   const [registerPhone, setRegisterPhone] = useState('');
   const [registerDepartment, setRegisterDepartment] = useState('');
@@ -112,8 +111,8 @@ const Auth = () => {
 
     setIsLoading(true);
     
-    // Sign up the user
-    const { error } = await signUp(registerEmail, registerPassword, registerFullName, registerRole);
+    // Sign up the user (role is assigned server-side via trigger for security)
+    const { error } = await signUp(registerEmail, registerPassword, registerFullName);
 
     if (error) {
       setIsLoading(false);
@@ -422,19 +421,6 @@ const Auth = () => {
                           <SelectItem value="second_year">Second Year</SelectItem>
                           <SelectItem value="third_year">Third Year</SelectItem>
                           <SelectItem value="fourth_year">Fourth Year</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="register-role">Role</Label>
-                      <Select value={registerRole} onValueChange={setRegisterRole}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select your role" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="student">Student</SelectItem>
-                          <SelectItem value="teacher">Teacher</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
