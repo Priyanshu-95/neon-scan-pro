@@ -271,7 +271,6 @@ serve(async (req) => {
       method: "face_scan",
       student_name: matchedProfile.full_name,
       enrollment_number: matchedProfile.enrollment_number || matchedProfile.roll_number,
-      attempt_status: "success",
       face_verified: true,
     });
 
