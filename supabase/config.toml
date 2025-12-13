@@ -1,1 +1,4 @@
 project_id = "vqluwvnydbtfqdgqprqv"
+
+[functions.face-scan-attendance]
+verify_jwt = false

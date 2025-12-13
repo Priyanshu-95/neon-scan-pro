@@ -11,7 +11,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import FaceScannerAnimation from '@/components/FaceScannerAnimation';
 import FaceCapture from '@/components/FaceCapture';
-import { Eye, EyeOff, Mail, Lock, User, Phone, Hash, ArrowLeft, ArrowRight, Check } from 'lucide-react';
+import FaceScanAttendance from '@/components/FaceScanAttendance';
+import { Eye, EyeOff, Mail, Lock, User, Phone, Hash, ArrowLeft, ArrowRight, Check, Scan } from 'lucide-react';
 import { z } from 'zod';
 
 // Validation schemas
@@ -33,6 +34,7 @@ const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [registrationStep, setRegistrationStep] = useState(1);
+  const [showFaceScan, setShowFaceScan] = useState(false);
   
   // Login form
   const [loginEmail, setLoginEmail] = useState('');
@@ -288,7 +290,34 @@ const Auth = () => {
                 <Button type="submit" className="w-full glow-blue" disabled={isLoading}>
                   {isLoading ? 'Signing in...' : 'Sign In'}
                 </Button>
+
+                {/* Face Scan Attendance Divider */}
+                <div className="relative my-4">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t border-border" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-card px-2 text-muted-foreground">Or</span>
+                  </div>
+                </div>
+
+                {/* Face Scan Attendance Button */}
+                <Button 
+                  type="button" 
+                  variant="outline"
+                  className="w-full glow-border-purple gap-2"
+                  onClick={() => setShowFaceScan(true)}
+                >
+                  <Scan className="w-4 h-4" />
+                  Mark Attendance (Face Scan)
+                </Button>
               </form>
+
+              {/* Face Scan Modal */}
+              <FaceScanAttendance 
+                isOpen={showFaceScan} 
+                onClose={() => setShowFaceScan(false)} 
+              />
             </TabsContent>
 
             <TabsContent value="register">
