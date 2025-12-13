@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Calendar, CheckCircle2, Clock, Camera, LogOut, User } from 'lucide-react';
+import { Calendar, CheckCircle2, Clock, LogOut, User } from 'lucide-react';
 import DashboardCard from '@/components/DashboardCard';
-import CameraFeed from '@/components/CameraFeed';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -19,7 +18,6 @@ interface AttendanceRecord {
 const StudentDashboard = () => {
   const navigate = useNavigate();
   const { user, signOut, loading } = useAuth();
-  const [scanning, setScanning] = useState(false);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [stats, setStats] = useState({
     totalClasses: 0,
@@ -68,37 +66,6 @@ const StudentDashboard = () => {
       attendanceRate: rate,
       thisMonthRate: rate
     });
-  };
-
-  const handleMarkAttendance = async () => {
-    if (!user) {
-      toast.error('Please login first');
-      return;
-    }
-
-    setScanning(true);
-    
-    // Simulate face recognition delay
-    setTimeout(async () => {
-      const { error } = await supabase
-        .from('attendance_records')
-        .insert({
-          user_id: user.id,
-          status: 'present',
-          face_verified: true,
-          marked_at: new Date().toISOString()
-        });
-
-      setScanning(false);
-
-      if (error) {
-        console.error('Error marking attendance:', error);
-        toast.error('Failed to mark attendance');
-      } else {
-        toast.success('Attendance marked successfully!');
-        fetchAttendanceRecords();
-      }
-    }, 3000);
   };
 
   const handleLogout = async () => {
@@ -166,24 +133,7 @@ const StudentDashboard = () => {
           />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Mark Attendance Section */}
-          <DashboardCard title="Mark Today's Attendance" glowColor="blue">
-            <div className="space-y-4">
-              <div className="flex justify-center py-4">
-                <CameraFeed isActive={scanning} size={240} />
-              </div>
-              <Button 
-                onClick={handleMarkAttendance} 
-                disabled={scanning}
-                className="w-full bg-primary hover:bg-primary/90 glow-blue"
-              >
-                <Camera className="mr-2 h-4 w-4" />
-                {scanning ? 'Scanning Face...' : 'Mark Attendance via Face Recognition'}
-              </Button>
-            </div>
-          </DashboardCard>
-
+        <div className="grid grid-cols-1 gap-6">
           {/* Attendance History */}
           <DashboardCard title="Recent Attendance History" glowColor="purple">
             <div className="space-y-3">

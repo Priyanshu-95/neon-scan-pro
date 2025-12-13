@@ -1,9 +1,13 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import FaceScannerAnimation from '@/components/FaceScannerAnimation';
-import { Camera, Users, BarChart3, Shield } from 'lucide-react';
+import FaceScanAttendance from '@/components/FaceScanAttendance';
+import { Camera, Users, BarChart3, Shield, Scan } from 'lucide-react';
 
 const Index = () => {
+  const [showFaceScan, setShowFaceScan] = useState(false);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 relative overflow-hidden">
       {/* Animated background elements */}
@@ -30,18 +34,26 @@ const Index = () => {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link to="/login">
-                <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground glow-blue text-lg px-8">
-                  <Camera className="mr-2 h-5 w-5" />
-                  Get Started
-                </Button>
-              </Link>
+              <Button 
+                size="lg" 
+                className="bg-primary hover:bg-primary/90 text-primary-foreground glow-blue text-lg px-8"
+                onClick={() => setShowFaceScan(true)}
+              >
+                <Scan className="mr-2 h-5 w-5" />
+                Mark Attendance (Face Scan)
+              </Button>
               <Link to="/auth">
                 <Button size="lg" variant="outline" className="text-lg px-8 glow-border-purple">
-                  Register Now
+                  Login / Register
                 </Button>
               </Link>
             </div>
+
+            {/* Face Scan Modal */}
+            <FaceScanAttendance 
+              isOpen={showFaceScan} 
+              onClose={() => setShowFaceScan(false)} 
+            />
           </div>
 
           {/* Features Grid */}
