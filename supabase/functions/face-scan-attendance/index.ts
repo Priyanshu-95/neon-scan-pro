@@ -6,6 +6,49 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Helper function to convert storage file to base64
+async function getImageAsBase64(supabase: any, faceImageUrl: string): Promise<string | null> {
+  try {
+    // Extract the path from the URL
+    // URL format: https://xxx.supabase.co/storage/v1/object/public/face-images/userId/filename.jpg
+    const urlParts = faceImageUrl.split('/storage/v1/object/public/');
+    if (urlParts.length !== 2) {
+      console.error('Invalid storage URL format:', faceImageUrl);
+      return null;
+    }
+    
+    const pathParts = urlParts[1].split('/');
+    const bucketName = pathParts[0];
+    const filePath = pathParts.slice(1).join('/');
+    
+    console.log(`Downloading from bucket: ${bucketName}, path: ${filePath}`);
+    
+    // Download the file using service role
+    const { data, error } = await supabase.storage
+      .from(bucketName)
+      .download(filePath);
+    
+    if (error) {
+      console.error('Error downloading file:', error);
+      return null;
+    }
+    
+    // Convert blob to base64
+    const arrayBuffer = await data.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+    let binary = '';
+    for (let i = 0; i < uint8Array.length; i++) {
+      binary += String.fromCharCode(uint8Array[i]);
+    }
+    const base64 = btoa(binary);
+    
+    return `data:image/jpeg;base64,${base64}`;
+  } catch (error) {
+    console.error('Error converting image to base64:', error);
+    return null;
+  }
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -72,6 +115,15 @@ serve(async (req) => {
       try {
         console.log(`Comparing with profile: ${profile.full_name}`);
         
+        // Download and convert stored face image to base64
+        const storedFaceBase64 = await getImageAsBase64(supabase, profile.face_image_url);
+        if (!storedFaceBase64) {
+          console.error(`Failed to get base64 for profile ${profile.full_name}`);
+          continue;
+        }
+        
+        console.log(`Successfully converted image for ${profile.full_name}`);
+        
         const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
           method: "POST",
           headers: {
@@ -117,7 +169,7 @@ serve(async (req) => {
                   },
                   {
                     type: "image_url",
-                    image_url: { url: profile.face_image_url }
+                    image_url: { url: storedFaceBase64 }
                   }
                 ]
               }
@@ -169,15 +221,8 @@ serve(async (req) => {
     const CONFIDENCE_THRESHOLD = 70;
 
     if (!matchedProfile || highestConfidence < CONFIDENCE_THRESHOLD) {
-      // Log failed attempt
-      await supabase.from("attendance_records").insert({
-        user_id: "00000000-0000-0000-0000-000000000000", // Placeholder for unmatched
-        status: "failed",
-        method: "face_scan",
-        attempt_status: "failed",
-        failure_reason: matchedProfile ? "low_confidence" : "no_match",
-        face_verified: false,
-      });
+      // Log failed attempt - use null for user_id on failed matches
+      console.log(`No match found. Highest confidence: ${highestConfidence}`);
 
       return new Response(
         JSON.stringify({ 
@@ -203,7 +248,7 @@ serve(async (req) => {
       .eq("status", "present")
       .gte("marked_at", today.toISOString())
       .lt("marked_at", tomorrow.toISOString())
-      .single();
+      .maybeSingle();
 
     if (existingAttendance) {
       return new Response(
