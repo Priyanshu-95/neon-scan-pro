@@ -17,26 +17,35 @@ export type Database = {
       attendance_records: {
         Row: {
           created_at: string
+          enrollment_number: string | null
           face_verified: boolean | null
           id: string
           marked_at: string
+          method: string | null
           status: string
+          student_name: string | null
           user_id: string
         }
         Insert: {
           created_at?: string
+          enrollment_number?: string | null
           face_verified?: boolean | null
           id?: string
           marked_at?: string
+          method?: string | null
           status?: string
+          student_name?: string | null
           user_id: string
         }
         Update: {
           created_at?: string
+          enrollment_number?: string | null
           face_verified?: boolean | null
           id?: string
           marked_at?: string
+          method?: string | null
           status?: string
+          student_name?: string | null
           user_id?: string
         }
         Relationships: []
