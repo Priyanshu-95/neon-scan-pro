@@ -107,6 +107,7 @@ serve(async (req) => {
 
     let matchedProfile = null;
     let highestConfidence = 0;
+    let hadRateLimitError = false;
 
     // Compare captured face with each registered face
     for (const profile of profiles) {
@@ -178,7 +179,18 @@ serve(async (req) => {
         });
 
         if (!aiResponse.ok) {
-          console.error(`AI API error for profile ${profile.full_name}:`, await aiResponse.text());
+          const errorText = await aiResponse.text();
+          console.error(`AI API error for profile ${profile.full_name}:`, errorText);
+
+          try {
+            const parsedError = JSON.parse(errorText);
+            if (parsedError?.type === "rate_limited" || parsedError?.error?.type === "rate_limited") {
+              hadRateLimitError = true;
+            }
+          } catch (_) {
+            // Ignore JSON parse errors, keep generic logging
+          }
+
           continue;
         }
 
@@ -220,18 +232,32 @@ serve(async (req) => {
     // Threshold for a valid match
     const CONFIDENCE_THRESHOLD = 70;
 
+    // If we were rate limited and couldn't compare, surface that explicitly
+    if (hadRateLimitError && highestConfidence === 0) {
+      console.log("AI rate limited during face comparison");
+
+      return new Response(
+        JSON.stringify({
+          status: "failed",
+          reason: "rate_limited",
+          message: "Face recognition service is temporarily busy. Please try again in a minute.",
+          confidence: highestConfidence,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     if (!matchedProfile || highestConfidence < CONFIDENCE_THRESHOLD) {
-      // Log failed attempt - use null for user_id on failed matches
       console.log(`No match found. Highest confidence: ${highestConfidence}`);
 
       return new Response(
-        JSON.stringify({ 
-          status: "failed", 
-          reason: "no_match", 
+        JSON.stringify({
+          status: "failed",
+          reason: "no_match",
           message: "No matching face found in the database. Please try again or contact admin.",
-          confidence: highestConfidence
+          confidence: highestConfidence,
         }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
